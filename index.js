@@ -20,12 +20,46 @@ async function run() {
     try {
       await client.connect();
        const servicesCollection = client.db("doctors_portal").collection("services")
+       const bookingCollection = client.db("doctors_portal").collection("bookings")
 
      app.get("/service" , async (req, res) => {
         const query ={}
         const cursor = servicesCollection.find(query);
         const services = await cursor.toArray();
         res.send(services);
+     })
+    
+    app.get('/available' , async(req, res) => {
+      const date = req.query.date || "May 19, 2022"
+      //step-1  get all services
+      const services = await servicesCollection.find().toArray()
+      // step-2 get the booking of the day
+      const query = {date : date};
+      const bookings = await bookingCollection.find(query).toArray();
+     // step 3: for each service
+     services.forEach(service=>{
+      // step 4: find bookings for that service. output: [{}, {}, {}, {}]
+      const serviceBookings = bookings.filter(book => book.treatment === service.name);
+      // step 5: select slots for the service Bookings: ['', '', '', '']
+      const bookedSlots = serviceBookings.map(book => book.slot);
+      // step 6: select those slots that are not in bookedSlots
+      const available = service.slots.filter(slot => !bookedSlots.includes(slot));
+      //step 7: set available to slots to make it easier 
+      service.slots = available;
+    });
+      res.send(services)
+    })
+
+     app.post("/booking", async(req, res) => {
+       const booking = req.body;
+       const query = {treatment: booking.treatment , patient: booking.patient, date: booking.date}
+       const exists = await bookingCollection.findOne(query);
+       if(exists){
+         return res.send({success : false ,booking : exists});
+       }
+       const result = await bookingCollection.insertOne(booking);
+       res.send({success : true, result});
+
      })
     } finally {
      
